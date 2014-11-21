@@ -8,7 +8,10 @@
     :license: BSD, see LICENSE for more details.
 """
 
+import socket
 import struct
+from collections import namedtuple
+from configparser import ConfigParser
 
 # some constants
 STX = 0xa5
@@ -23,6 +26,25 @@ RET_NO_USER         = 0x06 # user not exist
 RET_TIME_OUT        = 0x08 # capture timeout
 RET_USER_OCCUPIED   = 0x0a # user already exists
 RET_FINGER_OCCUPIED = 0x0b # fingerprint already exists
+
+# commands
+CMD_GET_INFO            = 0x30
+CMD_SET_INFO            = 0x31
+CMD_GET_INFO_2          = 0x32
+CMD_SET_INFO_2          = 0x33
+CMD_GET_DATETIME        = 0x38
+CMD_SET_DATETIME        = 0x39
+CMD_SET_TCPIP_PARAMS    = 0x3b
+CMD_GET_RECORD_INFO     = 0x3c
+CMD_DOWNLOAD_RECORDS    = 0x40
+CMD_UPLOAD_RECORDS      = 0x41
+CMD_DOWNLOAD_STAFF_INFO = 0x42
+CMD_UPLOAD_STAFF_INFO   = 0x43
+
+CMD_GET_DEVICE_SN       = 0x46
+CMD_SET_DEVICE_SN       = 0x47
+CMD_GET_DEVICE_TYPE     = 0x48
+CMD_SET_DEVICE_TYPE     = 0x49
 
 # crc16 bits
 _crc_table = (
@@ -71,3 +93,54 @@ def build_request(device_id, cmd, data=b''):
         req.extend(data)
     req.extend(crc16(req))
     return req
+
+def check_response(device_id, cmd, resp):
+    dev_id, ack, ret = struct.unpack(">xLcc", resp)
+    print("dev_id: {}, ack: {}, ret: {}".format(dev_id, ack, ret))
+    return (resp[0] == STX and\
+            dev_id == device_id and\
+            ack == bytes([cmd + ACK_sum]) and\
+            ord(ret) == RET_SUCCESS)
+
+
+class DeviceException(Exception):
+    pass
+
+
+class Device(object):
+
+    _connected = False
+
+    def __init__(self):
+        c = ConfigParser()
+        c.read('anviz.ini')
+        self.device_id = c.getint('anviz', 'device_id')
+        self.ip_addr = c.get('anviz', 'ip_addr')
+        self.ip_port = c.getint('anviz', 'ip_port')
+        self._s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    def check_connected(self):
+        if not self._connected:
+            self._s.connect((self.ip_addr, self.ip_port))
+            self._connected = True
+
+    def _get_response(self, cmd, args=[]):
+        req = build_request(self.device_id, cmd, args)
+        self.check_connected()
+        self._s.send(req)
+        res = bytearray(self._s.recv(7))
+        if not check_response(self.device_id, cmd, res):
+            raise DeviceException("Error in response")
+        rlen = self._s.recv(2)
+        res.extend(rlen)
+        data_len = struct.unpack(">H", rlen)[0]
+        data = self._s.recv(data_len)
+        res.extend(data)
+        crc = self._s.recv(2)
+        if crc16(res) != crc:
+            raise DeviceException("Checksum error")
+        return data
+
+    def get_information(self):
+        data = self._get_response(CMD_GET_INFO)
+        return data
