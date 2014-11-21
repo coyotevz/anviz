@@ -10,6 +10,7 @@
 
 import socket
 import struct
+from datetime import datetime
 from collections import namedtuple
 from configparser import ConfigParser
 
@@ -96,7 +97,6 @@ def build_request(device_id, cmd, data=b''):
 
 def check_response(device_id, cmd, resp):
     dev_id, ack, ret = struct.unpack(">xLcc", resp)
-    print("dev_id: {}, ack: {}, ret: {}".format(dev_id, ack, ret))
     return (resp[0] == STX and\
             dev_id == device_id and\
             ack == bytes([cmd + ACK_sum]) and\
@@ -144,3 +144,8 @@ class Device(object):
     def get_information(self):
         data = self._get_response(CMD_GET_INFO)
         return data
+
+    def get_datetime(self):
+        data = self._get_response(CMD_GET_DATETIME)
+        y, m, d, h, mi, s = struct.unpack("B"*6, data)
+        return datetime(2000+y, m, d, h, mi, s)
