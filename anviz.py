@@ -10,6 +10,7 @@
 
 import socket
 import struct
+import itertools
 from datetime import datetime
 from collections import namedtuple
 from configparser import ConfigParser
@@ -17,6 +18,7 @@ from configparser import ConfigParser
 # some constants
 STX = 0xa5
 ACK_sum = 0x80
+SSEC = datetime(2000, 1, 2, 0, 0).timestamp()
 
 # return value constants
 RET_SUCCESS         = 0x00 # operation successful
@@ -107,6 +109,48 @@ def check_response(device_id, cmd, resp):
 NetParams = namedtuple("NetParams", "ip netmask mac gw server far com mode dhcp")
 RecordsInfo = namedtuple("RecordsInfo", "users fingerprints passwords cards all_records new_records")
 
+#: bkp = 0: FP1, 1: FP2, 2: Password, 3: RFID Card
+#: type = 0: IN, 1: OUT
+Record = namedtuple("Record", "code datetime bkp type work")
+
+def ip_format(it):
+    return ".".join(str(i) for i in struct.unpack("BBBB", it))
+
+def mac_format(it):
+    return ":".join(format(i, "02x") for i in struct.unpack("BBBBBB", it))
+
+def left_fill(b, n=0):
+    return (b'\x00'*n + b)[-n:]
+
+# iterator utils
+def b_take(it, n):
+    return bytes(itertools.islice(it, n))
+
+def split_every(n, iterator, conv=list):
+    it = iter(iterator)
+    piece = conv(itertools.islice(it, n))
+    while piece:
+        yield piece
+        piece = conv(itertools.islice(it, n))
+
+def parse_record(data):
+    it = iter(data)
+    uid = struct.unpack(">Q", left_fill(b_take(it, 5), 8))[0]
+    sec = struct.unpack(">I", b_take(it, 4))[0]
+    bkp = struct.unpack("B", b_take(it, 1))[0]
+    rtype = struct.unpack("B", b_take(it, 1))[0]
+    wtype = struct.unpack(">I", left_fill(b_take(it, 3), 4))[0]
+    return Record(uid, datetime.fromtimestamp(SSEC + sec), bkp, rtype, wtype)
+
+
+def parse_records(data):
+    data = bytearray(data)
+    valids = data.pop(0)
+    records = list()
+    for rdata in split_every(14, data, bytes):
+        records.append(parse_record(rdata))
+    assert len(records) == valids
+    return records
 
 class DeviceException(Exception):
     pass
@@ -163,25 +207,58 @@ class Device(object):
 
 
     def get_net_params(self):
-        data = self._get_response(CMD_GET_TCPIP_PARAMS)
-        ip = ".".join([str(i) for i in struct.unpack("B"*4, data[0:4])])
-        netmask = ".".join([str(i) for i in struct.unpack("B"*4, data[4:8])])
-        mac = ":".join([format(i, "02x") for i in struct.unpack("B"*6, data[8:14])])
-        gw = ".".join([str(i) for i in struct.unpack("B"*4, data[14:18])])
-        server = ".".join([str(i) for i in struct.unpack("B"*4, data[18:22])])
-        com = struct.unpack("H", data[23:25])[0]
-        return NetParams(ip, netmask, mac, gw, server, data[22], com,
-                         data[25], data[26])
+        it = iter(self._get_response(CMD_GET_TCPIP_PARAMS))
+        ip = ip_format(b_take(it, 4))
+        netmask = ip_format(b_take(it, 4))
+        mac = mac_format(b_take(it, 6))
+        gw = ip_format(b_take(it, 4))
+        server = ip_format(b_take(it, 4))
+        far = ord(b_take(it, 1))
+        com = struct.unpack("H", b_take(it, 2))[0]
+        mode = ord(b_take(it, 1))
+        dhcp = ord(b_take(it, 1))
+        return NetParams(ip, netmask, mac, gw, server, far, com, mode, dhcp)
 
     def get_record_info(self):
-        data = self._get_response(CMD_GET_RECORD_INFO)
-        users = sum(struct.unpack(">BH", data[:3]))
-        fp = sum(struct.unpack(">BH", data[3:6]))
-        passwd = sum(struct.unpack(">BH", data[6:9]))
-        card = sum(struct.unpack(">BH", data[9:12]))
-        all_records = sum(struct.unpack(">BH", data[12:15]))
-        new_records = sum(struct.unpack(">BH", data[15:18]))
+        it = iter(self._get_response(CMD_GET_RECORD_INFO))
+        users = sum(struct.unpack(">BH", b_take(it, 3)))
+        fp = sum(struct.unpack(">BH", b_take(it, 3)))
+        passwd = sum(struct.unpack(">BH", b_take(it, 3)))
+        card = sum(struct.unpack(">BH", b_take(it, 3)))
+        all_records = sum(struct.unpack(">BH", b_take(it, 3)))
+        new_records = sum(struct.unpack(">BH", b_take(it, 3)))
         return RecordsInfo(users, fp, passwd, card, all_records, new_records)
+
+    def download_records(self, new=False):
+        info = self.get_record_info()
+        records = list()
+        if new:
+            total = info.new_records
+            param = 2
+        else:
+            total = info.all_records
+            param = 1
+        q = min([25, total])
+        data = self._get_response(CMD_DOWNLOAD_RECORDS, [param, q])
+        records.extend(parse_records(data))
+        left = total - q
+        print("total:", total)
+        while left > 0:
+            q = min([25, left])
+            data = self._get_response(CMD_DOWNLOAD_RECORDS, [0, q])
+            records.extend(parse_records(data))
+            left = left - q
+            print("left:", left)
+        return records
+
+    def download_all_records(self):
+        return self.download_records(new=False)
+
+    def download_new_records(self):
+        return self.download_records(new=True)
+
+    def download_staff_info(self):
+        pass
 
 
 if __name__ == '__main__':
