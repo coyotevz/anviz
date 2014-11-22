@@ -35,6 +35,7 @@ CMD_GET_INFO_2          = 0x32
 CMD_SET_INFO_2          = 0x33
 CMD_GET_DATETIME        = 0x38
 CMD_SET_DATETIME        = 0x39
+CMD_GET_TCPIP_PARAMS    = 0x3a
 CMD_SET_TCPIP_PARAMS    = 0x3b
 CMD_GET_RECORD_INFO     = 0x3c
 CMD_DOWNLOAD_RECORDS    = 0x40
@@ -103,6 +104,10 @@ def check_response(device_id, cmd, resp):
             ord(ret) == RET_SUCCESS)
 
 
+NetParams = namedtuple("NetParams", "ip netmask mac gw server far com mode dhcp")
+RecordsInfo = namedtuple("RecordsInfo", "users fingerprints passwords cards all_records new_records")
+
+
 class DeviceException(Exception):
     pass
 
@@ -149,3 +154,28 @@ class Device(object):
         data = self._get_response(CMD_GET_DATETIME)
         y, m, d, h, mi, s = struct.unpack("B"*6, data)
         return datetime(2000+y, m, d, h, mi, s)
+
+    def get_net_params(self):
+        data = self._get_response(CMD_GET_TCPIP_PARAMS)
+        ip = ".".join([str(i) for i in struct.unpack("B"*4, data[0:4])])
+        netmask = ".".join([str(i) for i in struct.unpack("B"*4, data[4:8])])
+        mac = ":".join([format(i, "02x") for i in struct.unpack("B"*6, data[8:14])])
+        gw = ".".join([str(i) for i in struct.unpack("B"*4, data[14:18])])
+        server = ".".join([str(i) for i in struct.unpack("B"*4, data[18:22])])
+        com = struct.unpack("H", data[23:25])[0]
+        return NetParams(ip, netmask, mac, gw, server, data[22], com,
+                         data[25], data[26])
+
+    def get_record_info(self):
+        data = self._get_response(CMD_GET_RECORD_INFO)
+        users = sum(struct.unpack(">BH", data[:3]))
+        fp = sum(struct.unpack(">BH", data[3:6]))
+        passwd = sum(struct.unpack(">BH", data[6:9]))
+        card = sum(struct.unpack(">BH", data[9:12]))
+        all_records = sum(struct.unpack(">BH", data[12:15]))
+        new_records = sum(struct.unpack(">BH", data[15:18]))
+        return RecordsInfo(users, fp, passwd, card, all_records, new_records)
+
+
+if __name__ == '__main__':
+    clock = Device()
