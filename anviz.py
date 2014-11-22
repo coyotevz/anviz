@@ -113,6 +113,8 @@ RecordsInfo = namedtuple("RecordsInfo", "users fingerprints passwords cards all_
 #: type = 0: IN, 1: OUT
 Record = namedtuple("Record", "code datetime bkp type work")
 
+StaffInfo = namedtuple("StaffInfo", "code pwd card name dep group mode fp special")
+
 def ip_format(it):
     return ".".join(str(i) for i in struct.unpack("BBBB", it))
 
@@ -151,6 +153,28 @@ def parse_records(data):
         records.append(parse_record(rdata))
     assert len(records) == valids
     return records
+
+def parse_s_info(data):
+    it = iter(data)
+    uid = struct.unpack(">Q", left_fill(b_take(it, 5), 8))[0]
+    pwd = struct.unpack(">L", left_fill(b_take(it, 3), 4))[0]
+    card = struct.unpack(">L", left_fill(b_take(it, 3), 4))[0]
+    name = b"".join(struct.unpack("c"*10, b_take(it, 10)))
+    dep = struct.unpack("B", b_take(it, 1))[0]
+    group = struct.unpack("B", b_take(it, 1))[0]
+    mode = struct.unpack("B", b_take(it, 1))[0]
+    fp = struct.unpack("H", b_take(it, 2))[0]
+    special = struct.unpack("B", b_take(it, 1))[0]
+    return StaffInfo(uid, pwd, card, name, dep, group, mode, fp, special)
+
+def parse_staff_info(data):
+    data = bytearray(data)
+    valids = data.pop(0)
+    info = list()
+    for sidata in split_every(27, data, bytes):
+        info.append(parse_s_info(sidata))
+    assert len(info) == valids
+    return info
 
 class DeviceException(Exception):
     pass
@@ -258,7 +282,20 @@ class Device(object):
         return self.download_records(new=True)
 
     def download_staff_info(self):
-        pass
+        users = self.get_record_info().users
+        staff = list()
+        q = min([12, users])
+        data = self._get_response(CMD_DOWNLOAD_STAFF_INFO, [1, q])
+        staff.extend(parse_staff_info(data))
+        left = users - q
+        print("total users:", users)
+        while left > 0:
+            q = min([12, left])
+            data = self._get_response(CMD_DOWNLOAD_STAFF_INFO, [0, q])
+            staff.extend(parse_staff_info(data))
+            left = left - q
+            print("left:", left)
+        return staff
 
 
 if __name__ == '__main__':
