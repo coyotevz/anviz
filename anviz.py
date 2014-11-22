@@ -155,6 +155,13 @@ class Device(object):
         y, m, d, h, mi, s = struct.unpack("B"*6, data)
         return datetime(2000+y, m, d, h, mi, s)
 
+    def set_datetime(self, dt):
+        assert isinstance(dt, datetime), "You must provide datetime argument"
+        args = [dt.year-2000, dt.month, dt.day, dt.hour, dt.minute, dt.second]
+        res = self._get_response(CMD_SET_DATETIME, args)
+        return len(res) == 0
+
+
     def get_net_params(self):
         data = self._get_response(CMD_GET_TCPIP_PARAMS)
         ip = ".".join([str(i) for i in struct.unpack("B"*4, data[0:4])])
