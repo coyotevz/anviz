@@ -157,14 +157,22 @@ def parse_records(data):
 def parse_s_info(data):
     it = iter(data)
     uid = struct.unpack(">Q", left_fill(b_take(it, 5), 8))[0]
-    pwd = struct.unpack(">L", left_fill(b_take(it, 3), 4))[0]
-    card = struct.unpack(">L", left_fill(b_take(it, 3), 4))[0]
-    name = b"".join(struct.unpack("c"*10, b_take(it, 10)))
-    dep = struct.unpack("B", b_take(it, 1))[0]
-    group = struct.unpack("B", b_take(it, 1))[0]
-    mode = struct.unpack("B", b_take(it, 1))[0]
+    pwd = b_take(it, 3)
+    if pwd == b'\xff\xff\xff':
+        pwd = None
+    else:
+        pwd = struct.unpack(">L", left_fill(pwd, 4))[0]
+    card = b_take(it, 3)
+    if card == b'\xff\xff\xff':
+        card = None
+    else:
+        card = struct.unpack(">L", left_fill(card, 4))[0]
+    name = b_take(it, 10)
+    dep = ord(b_take(it, 1))
+    group = ord(b_take(it, 1))
+    mode = ord(b_take(it, 1))
     fp = struct.unpack("H", b_take(it, 2))[0]
-    special = struct.unpack("B", b_take(it, 1))[0]
+    special = ord(b_take(it, 1))
     return StaffInfo(uid, pwd, card, name, dep, group, mode, fp, special)
 
 def parse_staff_info(data):
