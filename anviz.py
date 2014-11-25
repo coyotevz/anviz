@@ -193,9 +193,9 @@ class Device(object):
 
     _connected = False
 
-    def __init__(self):
+    def __init__(self, conffile='anviz.ini'):
         c = ConfigParser()
-        c.read('anviz.ini')
+        c.read(conffile)
         self.device_id = c.getint('anviz', 'device_id')
         self.ip_addr = c.get('anviz', 'ip_addr')
         self.ip_port = c.getint('anviz', 'ip_port')
@@ -264,7 +264,6 @@ class Device(object):
 
     def download_records(self, new=False):
         info = self.get_record_info()
-        records = list()
         if new:
             total = info.new_records
             param = 2
@@ -273,16 +272,15 @@ class Device(object):
             param = 1
         q = min([25, total])
         data = self._get_response(CMD_DOWNLOAD_RECORDS, [param, q])
-        records.extend(parse_records(data))
+        for r in parse_records(data):
+            yield r
         left = total - q
-        print("total:", total)
         while left > 0:
             q = min([25, left])
             data = self._get_response(CMD_DOWNLOAD_RECORDS, [0, q])
-            records.extend(parse_records(data))
+            for r in parse_records(data):
+                yield r
             left = left - q
-            print("left:", left)
-        return records
 
     def download_all_records(self):
         return self.download_records(new=False)
@@ -297,13 +295,11 @@ class Device(object):
         data = self._get_response(CMD_DOWNLOAD_STAFF_INFO, [1, q])
         staff.extend(parse_staff_info(data))
         left = users - q
-        print("total users:", users)
         while left > 0:
             q = min([12, left])
             data = self._get_response(CMD_DOWNLOAD_STAFF_INFO, [0, q])
             staff.extend(parse_staff_info(data))
             left = left - q
-            print("left:", left)
         return staff
 
 
