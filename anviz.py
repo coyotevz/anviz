@@ -50,6 +50,8 @@ CMD_SET_DEVICE_SN       = 0x47
 CMD_GET_DEVICE_TYPE     = 0x48
 CMD_SET_DEVICE_TYPE     = 0x49
 
+CMD_CLEAR_RECORDS       = 0x4e
+
 # crc16 bits
 _crc_table = (
     0x0000,0x1189,0x2312,0x329b,0x4624,0x57ad,0x6536,0x74bf,0x8c48,0x9dc1,
@@ -280,6 +282,8 @@ class Device(object):
             data = self._get_response(CMD_DOWNLOAD_RECORDS, [0, q])
             for r in parse_records(data):
                 yield r
+            if new:
+                self.clear_records(q)
             left = left - q
 
     def download_all_records(self):
@@ -301,6 +305,17 @@ class Device(object):
             staff.extend(parse_staff_info(data))
             left = left - q
         return staff
+
+    def clear_records(self, amount=None):
+        # Only clear new record marks
+        if amount is None:
+            args = [1] + list(b'\x00\x00\x00')
+        else:
+            assert amount > 0
+            args = [2] + list(struct.pack(">L", amount)[-3:])
+        data = self._get_response(CMD_CLEAR_RECORDS, args)
+        cancelled = struct.unpack(">L", left_fill(data, 4))[0]
+        return cancelled
 
 
 if __name__ == '__main__':
