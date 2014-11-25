@@ -111,6 +111,7 @@ RecordsInfo = namedtuple("RecordsInfo", "users fingerprints passwords cards all_
 
 #: bkp = 0: FP1, 1: FP2, 2: Password, 3: RFID Card
 #: type = 0: IN, 1: OUT
+#: work = ??
 Record = namedtuple("Record", "code datetime bkp type work")
 
 StaffInfo = namedtuple("StaffInfo", "code pwd card name dep group mode fp special")
