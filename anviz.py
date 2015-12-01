@@ -138,7 +138,7 @@ def left_fill(b, n=0):
 
 # iterator utils
 def b_take(it, n):
-    return bytes(itertools.islice(it, n))
+    return bytearray(itertools.islice(it, n))
 
 def split_every(n, iterator, conv=list):
     it = iter(iterator)
@@ -161,7 +161,7 @@ def parse_records(data):
     data = bytearray(data)
     valids = data.pop(0)
     records = list()
-    for rdata in split_every(14, data, bytes):
+    for rdata in split_every(14, data, bytearray):
         records.append(parse_record(rdata))
     assert len(records) == valids
     return records
@@ -191,7 +191,7 @@ def parse_staff_info(data):
     data = bytearray(data)
     valids = data.pop(0)
     info = list()
-    for sidata in split_every(27, data, bytes):
+    for sidata in split_every(27, data, bytearray):
         info.append(parse_s_info(sidata))
     assert len(info) == valids
     return info
