@@ -113,7 +113,7 @@ def check_response(device_id, cmd, resp):
     dev_id, ack, ret = struct.unpack(">xLcc", resp)
     return (resp[0] == STX and\
             dev_id == device_id and\
-            ack == bytes([cmd + ACK_sum]) and\
+            ack == bytearray([cmd + ACK_sum]) and\
             ord(ret) == RET_SUCCESS)
 
 
