@@ -17,7 +17,6 @@ import struct
 import itertools
 from datetime import datetime
 from collections import namedtuple
-from configparser import ConfigParser
 
 # some constants
 STX = 0xa5
@@ -204,12 +203,10 @@ class Device(object):
 
     _connected = False
 
-    def __init__(self, conffile='anviz.ini'):
-        c = ConfigParser()
-        c.read(conffile)
-        self.device_id = c.getint('anviz', 'device_id')
-        self.ip_addr = c.get('anviz', 'ip_addr')
-        self.ip_port = c.getint('anviz', 'ip_port')
+    def __init__(self, device_id, ip_addr, ip_port):
+        self.device_id = device_id
+        self.ip_addr = ip_addr
+        self.ip_port = ip_port
         self._s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     def check_connected(self):
@@ -328,4 +325,4 @@ class Device(object):
 
 
 if __name__ == '__main__':
-    clock = Device()
+    clock = Device(device_id=98120327, ip_addr='192.168.1.30', ip_port=5010)
