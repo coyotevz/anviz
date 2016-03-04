@@ -326,3 +326,4 @@ class Device(object):
 
 if __name__ == '__main__':
     clock = Device(device_id=98120327, ip_addr='192.168.1.30', ip_port=5010)
+    print(clock.get_datetime())
