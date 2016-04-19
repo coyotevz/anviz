@@ -8,7 +8,7 @@
     https://github.com/benperiton/anviz-protocol
 
 
-    :copyright: (c) 2014 by Augusto Roccasalva
+    :copyright: (c) 2014-2016 by Augusto Roccasalva
     :license: BSD, see LICENSE for more details.
 """
 
@@ -17,6 +17,8 @@ import struct
 import itertools
 from datetime import datetime
 from collections import namedtuple
+
+__version__ = '0.1'
 
 # some constants
 STX = 0xa5
